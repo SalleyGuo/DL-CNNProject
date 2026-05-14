@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Image Classifier Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 700px;
+            margin: 50px auto;
+            text-align: center;
+        }
+        .box {
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 30px;
+        }
+        input, button {
+            margin-top: 15px;
+            font-size: 16px;
+        }
+        .result {
+            margin-top: 25px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>AI Image Classification Demo</h1>
+        <p>請上傳圖片，系統會進行分類預測。</p>
+
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="image" accept="image/*" required>
+            <br>
+            <button type="submit">開始辨識</button>
+        </form>
+
+        {% if prediction %}
+        <div class="result">
+            <p>預測結果：{{ prediction }}</p>
+            <p>信心度：{{ confidence }}</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
