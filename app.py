@@ -1,11 +1,6 @@
-# =========================
-# Render + FastAI Image Classifier
-# app.py
-# =========================
-
 import os
 
-# 限制 CPU threads，降低 Render 免費方案 worker 崩潰機率
+# 限制 CPU threads，降低 Render worker 崩潰機率
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -18,50 +13,41 @@ import pathlib
 import torch
 import traceback
 
-# =========================
-# 基本設定
-# =========================
-
-# 如果模型是在 Windows / Colab 環境匯出，Render Linux 讀取時可能需要這行
+# 修正 fastai 在 Linux 讀取 WindowsPath 的問題
 pathlib.WindowsPath = pathlib.PosixPath
 
-# 強制使用 CPU
+# 強制 CPU 推論
 torch.set_num_threads(1)
 
 app = Flask(__name__)
-
-# 限制上傳檔案大小，例如 10MB
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
-# 模型路徑：model.pkl 必須跟 app.py 放在同一層
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "model.pkl"
 
-# =========================
-# 載入模型
-# =========================
-
 learn = None
+model_error = None
+
+print("========== App starting ==========")
+print(f"BASE_DIR: {BASE_DIR}")
+print(f"MODEL_PATH: {MODEL_PATH}")
+print(f"MODEL_EXISTS: {MODEL_PATH.exists()}")
+print(f"Torch version: {torch.__version__}")
 
 try:
-    print(f"Loading model from: {MODEL_PATH}")
-
     if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
+        raise FileNotFoundError(f"找不到模型檔案：{MODEL_PATH}")
 
+    print("Start loading model...")
     learn = load_learner(MODEL_PATH, cpu=True)
-
     print("Model loaded successfully.")
 
 except Exception as e:
-    print("Failed to load model.")
-    print(e)
+    model_error = str(e)
+    print("========== Failed to load model ==========")
+    print(model_error)
     traceback.print_exc()
 
-
-# =========================
-# 首頁與預測功能
-# =========================
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -73,6 +59,9 @@ def index():
         try:
             if learn is None:
                 error = "模型尚未成功載入，請檢查 Render logs。"
+                if model_error:
+                    error += f" 錯誤原因：{model_error}"
+
                 return render_template(
                     "index.html",
                     prediction=prediction,
@@ -91,18 +80,16 @@ def index():
                     error=error
                 )
 
-            # 讀取圖片
             img = PILImage.create(file)
 
-            # 執行預測
             pred_class, pred_idx, probs = learn.predict(img)
 
             prediction = str(pred_class)
             confidence = f"{probs[pred_idx].item() * 100:.2f}%"
 
         except Exception as e:
-            error = "圖片辨識時發生錯誤，請確認上傳的是圖片檔。"
-            print("Prediction error:")
+            error = f"圖片辨識時發生錯誤：{str(e)}"
+            print("========== Prediction error ==========")
             print(e)
             traceback.print_exc()
 
@@ -114,22 +101,24 @@ def index():
     )
 
 
-# =========================
-# Render 健康檢查用
-# =========================
-
 @app.route("/health")
 def health():
     if learn is None:
-        return {"status": "error", "message": "model not loaded"}, 500
+        return {
+            "status": "error",
+            "message": "model not loaded",
+            "model_path": str(MODEL_PATH),
+            "model_exists": MODEL_PATH.exists(),
+            "error": model_error
+        }, 500
 
-    return {"status": "ok", "message": "model loaded"}, 200
+    return {
+        "status": "ok",
+        "message": "model loaded",
+        "model_path": str(MODEL_PATH),
+        "model_exists": MODEL_PATH.exists()
+    }, 200
 
-
-# =========================
-# 本機測試用
-# Render 正式部署會用 gunicorn，不會用這段啟動
-# =========================
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
