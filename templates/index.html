@@ -3,33 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <title>AI Image Classifier Demo</title>
+
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 700px;
+            font-family: Arial, "Microsoft JhengHei", sans-serif;
+            max-width: 720px;
             margin: 50px auto;
             text-align: center;
+            background-color: #f7f7f7;
         }
+
         .box {
+            background-color: white;
             border: 1px solid #ddd;
-            border-radius: 12px;
-            padding: 30px;
+            border-radius: 16px;
+            padding: 35px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
-        input, button {
-            margin-top: 15px;
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: #444;
+        }
+
+        input {
+            margin-top: 20px;
             font-size: 16px;
         }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            background-color: #333;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #555;
+        }
+
         .result {
-            margin-top: 25px;
+            margin-top: 30px;
+            padding: 18px;
+            background-color: #f0f8f0;
+            border-radius: 10px;
             font-size: 20px;
             font-weight: bold;
         }
+
+        .error {
+            margin-top: 30px;
+            padding: 18px;
+            background-color: #fff0f0;
+            border-radius: 10px;
+            color: #b00020;
+            font-weight: bold;
+        }
+
+        .note {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #777;
+        }
     </style>
 </head>
+
 <body>
     <div class="box">
         <h1>AI Image Classification Demo</h1>
-        <p>請上傳圖片，系統會進行分類預測。</p>
+        <p>請上傳圖片，系統會使用訓練好的模型進行分類預測。</p>
 
         <form method="POST" enctype="multipart/form-data">
             <input type="file" name="image" accept="image/*" required>
@@ -43,6 +92,16 @@
             <p>信心度：{{ confidence }}</p>
         </div>
         {% endif %}
+
+        {% if error %}
+        <div class="error">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <div class="note">
+            Render 部署版｜FastAI Image Classifier
+        </div>
     </div>
 </body>
 </html>
