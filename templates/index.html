@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: Arial, "Microsoft JhengHei", sans-serif;
-            max-width: 720px;
+            max-width: 760px;
             margin: 50px auto;
             text-align: center;
             background-color: #f7f7f7;
@@ -58,6 +58,20 @@
             font-weight: bold;
         }
 
+        .gradcam {
+            margin-top: 30px;
+            padding: 18px;
+            background-color: #f8f8ff;
+            border-radius: 10px;
+        }
+
+        .gradcam img {
+            max-width: 100%;
+            border-radius: 12px;
+            border: 1px solid #ddd;
+            margin-top: 12px;
+        }
+
         .error {
             margin-top: 30px;
             padding: 18px;
@@ -78,7 +92,7 @@
 <body>
     <div class="box">
         <h1>AI Image Classification Demo</h1>
-        <p>請上傳圖片，系統會使用訓練好的模型進行分類預測。</p>
+        <p>請上傳圖片，系統會使用訓練好的模型進行分類預測，並產生 Grad-CAM 熱區圖。</p>
 
         <form method="POST" enctype="multipart/form-data">
             <input type="file" name="image" accept="image/*" required>
@@ -90,6 +104,14 @@
         <div class="result">
             <p>Predicted：{{ prediction }}</p>
             <p>Confidence：{{ confidence }}</p>
+        </div>
+        {% endif %}
+
+        {% if gradcam_url %}
+        <div class="gradcam">
+            <h2>Grad-CAM Visualization</h2>
+            <p>紅色區域代表模型在判斷時較關注的位置。</p>
+            <img src="{{ gradcam_url }}" alt="Grad-CAM result">
         </div>
         {% endif %}
 
