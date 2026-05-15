@@ -230,25 +230,15 @@ def index():
             pil_img.save(buffer, format="PNG")
             buffer.seek(0)
 
-            img = PILImage.create(buffer)
-
-            with torch.no_grad():
-                pred_class, pred_idx, probs = learn.predict(img)
+            pred_class, pred_idx, conf_value, gradcam_img = make_gradcam_and_predict(pil_img)
 
             prediction = str(pred_class)
-            confidence = f"{probs[pred_idx].item() * 100:.2f}%"
-
-            # 產生 Grad-CAM
-            timestamp = int(time.time())
-            gradcam_filename = f"gradcam_{timestamp}.png"
+            confidence = f"{conf_value * 100:.2f}%"
+            
+            gradcam_filename = f"gradcam_{int(time.time())}.png"
             gradcam_path = STATIC_DIR / gradcam_filename
-
-            make_gradcam(
-                pil_img=pil_img,
-                class_idx=int(pred_idx),
-                output_path=gradcam_path
-            )
-
+            gradcam_img.save(gradcam_path)
+            
             gradcam_url = f"/static/{gradcam_filename}"
 
         except Exception as e:
