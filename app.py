@@ -84,84 +84,122 @@ def pil_to_tensor_for_model(pil_img):
     return x
 
 
-def make_gradcam(pil_img, class_idx, output_path):
+def log_step(message):
+    print(f"[DEBUG] {message}", flush=True)
+    sys.stdout.flush()
+
+
+def make_gradcam_and_predict(pil_img):
     """
-    產生 Grad-CAM 圖片並儲存。
-    pil_img: 原始 PIL Image
-    class_idx: 預測類別 index
-    output_path: 輸出圖片路徑
+    同時完成：
+    1. 模型預測
+    2. Grad-CAM 產生
+
+    加入 debug log，方便從 Render logs 判斷卡在哪一步。
     """
+
+    log_step("Grad-CAM started")
+
     model = learn.model
     model.eval()
 
+    log_step("Finding last conv layer")
     target_layer = find_last_conv_layer(model)
+    log_step(f"Target layer found: {target_layer}")
 
-    activations = []
-    gradients = []
+    activation_holder = {}
 
     def forward_hook(module, input, output):
-        activations.append(output.detach())
+        log_step("Forward hook triggered")
+        activation_holder["activation"] = output
+        output.retain_grad()
 
-    def backward_hook(module, grad_input, grad_output):
-        gradients.append(grad_output[0].detach())
-
-    forward_handle = target_layer.register_forward_hook(forward_hook)
-    backward_handle = target_layer.register_full_backward_hook(backward_hook)
+    handle = target_layer.register_forward_hook(forward_hook)
 
     try:
-        x = pil_to_tensor_for_model(pil_img)
+        log_step("Creating fastai batch")
+        xb = pil_to_batch(pil_img)
+        xb = xb.cpu()
+        log_step(f"Batch created: {xb.shape}")
 
-        # 確保在 CPU
-        x = x.cpu()
+        model.zero_grad(set_to_none=True)
 
-        model.zero_grad()
-
-        # Grad-CAM 需要 gradient，所以不能使用 torch.no_grad()
-        output = model(x)
+        log_step("Forward pass started")
+        output = model(xb)
+        log_step("Forward pass finished")
 
         if isinstance(output, tuple):
             output = output[0]
 
-        score = output[0, int(class_idx)]
+        log_step(f"Output shape: {output.shape}")
+
+        probs = torch.softmax(output, dim=1)
+        pred_idx = int(torch.argmax(probs, dim=1).item())
+        confidence = float(probs[0, pred_idx].item())
+
+        log_step(f"Predicted index: {pred_idx}")
+        log_step(f"Confidence: {confidence}")
+
+        score = output[0, pred_idx]
+
+        log_step("Backward pass started")
         score.backward()
+        log_step("Backward pass finished")
 
-        act = activations[0]      # shape: [1, C, H, W]
-        grad = gradients[0]       # shape: [1, C, H, W]
+        if "activation" not in activation_holder:
+            raise ValueError("沒有取得 activation，Grad-CAM 無法產生。")
 
-        # Global Average Pooling gradients
-        weights = grad.mean(dim=(2, 3), keepdim=True)
+        activation = activation_holder["activation"]
+        gradients = activation.grad
 
-        cam = (weights * act).sum(dim=1, keepdim=True)
+        if gradients is None:
+            raise ValueError("沒有取得 gradients，Grad-CAM 無法產生。")
+
+        log_step(f"Activation shape: {activation.shape}")
+        log_step(f"Gradient shape: {gradients.shape}")
+
+        weights = gradients.mean(dim=(2, 3), keepdim=True)
+        cam = (weights * activation).sum(dim=1, keepdim=True)
         cam = torch.relu(cam)
 
-        # Normalize CAM to 0-1
-        cam = cam.squeeze().cpu().numpy()
+        cam = cam.squeeze().detach().cpu().numpy()
         cam = cam - cam.min()
 
-        if cam.max() != 0:
+        if cam.max() > 0:
             cam = cam / cam.max()
 
-        # Resize CAM to original image size
-        cam_img = Image.fromarray(np.uint8(cam * 255)).resize(pil_img.size, Image.BILINEAR)
-        cam_np = np.array(cam_img).astype(np.float32) / 255.0
+        log_step("CAM calculated")
 
-        # 建立簡單 heatmap：紅色代表模型關注區域
+        cam_img = Image.fromarray(np.uint8(cam * 255)).resize(
+            pil_img.size,
+            Image.BILINEAR
+        )
+
+        cam_np = np.array(cam_img).astype(np.float32) / 255.0
         original = np.array(pil_img.convert("RGB")).astype(np.float32) / 255.0
 
         heatmap = np.zeros_like(original)
-        heatmap[:, :, 0] = cam_np       # red channel
-        heatmap[:, :, 1] = cam_np * 0.3 # slight yellow
+        heatmap[:, :, 0] = cam_np
+        heatmap[:, :, 1] = cam_np * 0.25
         heatmap[:, :, 2] = 0
 
-        overlay = original * 0.55 + heatmap * 0.45
+        overlay = original * 0.60 + heatmap * 0.40
         overlay = np.clip(overlay, 0, 1)
 
         result_img = Image.fromarray(np.uint8(overlay * 255))
-        result_img.save(output_path)
+
+        try:
+            pred_class = str(learn.dls.vocab[pred_idx])
+        except Exception:
+            pred_class = str(pred_idx)
+
+        log_step("Grad-CAM image created successfully")
+
+        return pred_class, pred_idx, confidence, result_img
 
     finally:
-        forward_handle.remove()
-        backward_handle.remove()
+        handle.remove()
+        log_step("Hook removed")
 
 
 @app.route("/", methods=["GET", "POST"])
