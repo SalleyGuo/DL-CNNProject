@@ -118,7 +118,7 @@ def make_gradcam_and_predict(pil_img):
 
     try:
         log_step("Creating fastai batch")
-        xb = pil_to_batch(pil_img)
+        xb = pil_to_tensor_for_model(pil_img)
         xb = xb.cpu()
         log_step(f"Batch created: {xb.shape}")
 
