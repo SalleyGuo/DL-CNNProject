@@ -186,7 +186,7 @@ def index():
                 )
 
             pil_img = Image.open(file.stream).convert("RGB")
-            pil_img.thumbnail((1024, 1024))
+            pil_img.thumbnail((224, 224))
 
             buffer = BytesIO()
             pil_img.save(buffer, format="PNG")
